@@ -1,0 +1,744 @@
+---
+title: "Świderski Szymon 298808 Assigment 1"
+author: "Szymon Świderski"
+date: "15 12 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This is a report that describes the work on assigment 1. Task was to write Representation of SQL queries in R. Each query should have four implementation in R:
+1. sqldf::sqldf() - reference solution
+2. only base function
+3. dplyr
+4. data.table
+
+First I will load everything:
+```{r message=FALSE, warning=FALSE, error=FALSE}
+library(dplyr)
+library(sqldf)
+library(knitr)
+library("data.table")
+
+options(dplyr.summarise.inform = FALSE)
+options(stringsAsFactors=FALSE)
+
+Badges <- read.csv("pd1/Badges.csv.gz")
+Comments <- read.csv("pd1/Comments.csv.gz")
+PostLinks <- read.csv("pd1/PostLinks.csv.gz")
+Posts <- read.csv("pd1/Posts.csv.gz")
+Users <- read.csv("pd1/Users.csv.gz")
+Votes <- read.csv("pd1/Votes.csv.gz")
+```
+
+Solution to each query is described below in separate chapter. Each chapter represents one query and consists of following parts:
+
+1. [First Query](#Q1)
+    1. [Reference Solution](#Q1_R)
+    2. [Base Solution](#Q1_B)
+    3. [Dplyr Solution](#Q1_D)
+    4. [Data.table Solution](#Q1_DT)
+2. [Second Query](#Q2)
+    1. [Reference Solution](#Q2_R)
+    2. [Base Solution](#Q2_B)
+    3. [Dplyr Solution](#Q2_D)
+    4. [Data.table Solution](#Q2_DT)
+3. [Third Query](#Q3)
+    1. [Reference Solution](#Q3_R)
+    2. [Base Solution](#Q3_B)
+    3. [Dplyr Solution](#Q3_D)
+    4. [Data.table Solution](#Q3_DT)
+4. [Fourth Query](#Q4)
+    1. [Reference Solution](#Q4_R)
+    2. [Base Solution](#Q4_B)
+    3. [Dplyr Solution](#Q4_D)
+    4. [Data.table Solution](#Q4_DT)
+5. [Fifth Query](#Q5)
+    1. [Reference Solution](#Q5_R)
+    2. [Base Solution](#Q5_B)
+    3. [Dplyr Solution](#Q5_D)
+    4. [Data.table Solution](#Q5_DT)
+5. [Summary](#sum)
+
+
+## First Query  <a name="Q1"></a>
+### Reference Solution <a name="Q1_R"></a>
+```{r}
+Q1_RS<-sqldf("
+SELECT Posts.Title, RelatedTab.NumLinks
+FROM
+(SELECT RelatedPostId AS PostId, COUNT(*) AS NumLinks
+  FROM PostLinks
+  GROUP BY RelatedPostId) AS RelatedTab
+JOIN Posts ON RelatedTab.PostId=Posts.Id
+WHERE Posts.PostTypeId=1
+ORDER BY NumLinks DESC")
+```
+
+### Base Solution <a name="Q1_B"></a>
+```{r message=FALSE}
+Q1_BS<-function() {
+RTab<-aggregate(PostLinks[c('RelatedPostId')],
+                by=PostLinks[c('RelatedPostId')],
+                length)
+colnames(RTab)<-c('PostId','NumLinks')
+df2 <- merge(Posts, RTab, by.x='Id',by.y='PostId')
+df2 <- df2[(df2$PostTypeId==1),c('Title','NumLinks')]
+df2 <- df2[order(df2$NumLinks,decreasing = c(TRUE)),]
+df2
+}
+```
+
+#### Description
+First of all, I created an inner query called Rtab (RelatedTab) using function aggregate. Length in function aggregate represents COUNT in SQL. So after aggregate, we have counted the number of RelatedPostId for every RelatedPostId.
+Then I connect Rtab with Posts using the merge function. After this, the WHERE statement and columns naming can be solved using simple: [(df2\$PostTypeId==1),c('Title','NumLinks')]. Then all left is the ORDER statement, for which I needed a simple Order function.
+
+I used function all_equal(df1, df2) Which returned TRUE
+
+```{r message=TRUE}
+all_equal(Q1_RS, Q1_BS())
+```
+### Dplyr Solution <a name="Q1_D"></a>
+```{r message=FALSE}
+Q1_DP<-function() {
+PostLinks %>% 
+  group_by(RelatedPostId) %>%
+  summarise(NumLinks=n())%>%
+  select(PostId=RelatedPostId,NumLinks)%>%
+  left_join(select(filter(Posts,PostTypeId==1),Id,Title,PostTypeId),c('PostId' = 'Id'))%>%
+  filter(!is.na(Title)) %>%
+  arrange(desc(NumLinks)) %>%
+  select(Title,NumLinks)->df2
+}
+```
+
+#### Description
+I used group_by to use summarise for counting how many ‘RelatedPostId’ they are. After it, I connected it with Posts. The filter allows me to connects only with posts with type 1. 
+```{r message=TRUE}
+all_equal(Q1_RS, Q1_DP())
+```
+### Data.table Solution <a name="Q1_DT"></a>
+```{r}
+Q1_DT<-function() {
+df2<-as.data.table(PostLinks)[, .(.N), by = RelatedPostId]
+df2<-df2[, .(RelatedTab=RelatedPostId,NumLinks=N)]
+df2<-merge(df2,as.data.table(Posts)[PostTypeId==1], by.x='RelatedTab',by.y='Id', all.x= T, all.y = F)
+df2<-df2[, .(Title,NumLinks)]
+df2<-df2[order(-NumLinks)]
+df2<-na.omit(df2)
+df2
+}
+```
+#### Description
+Way of solving it very similar to the basic one.
+```{r message=TRUE}
+all_equal(Q1_RS, Q1_DT())
+```
+## Second Query <a name="Q2"></a>
+### Reference Solution <a name="Q2_R"></a>
+```{r}
+Q2_RS<-sqldf("
+SELECT
+Users.DisplayName,
+Users.Age,
+Users.Location,
+SUM(Posts.FavoriteCount) AS FavoriteTotal,
+Posts.Title AS MostFavoriteQuestion,
+MAX(Posts.FavoriteCount) AS MostFavoriteQuestionLikes
+FROM Posts
+JOIN Users ON Users.Id=Posts.OwnerUserId
+WHERE Posts.PostTypeId=1
+GROUP BY OwnerUserId
+ORDER BY FavoriteTotal DESC
+LIMIT 10")
+```
+### Base Solution <a name="Q2_B"></a>
+
+```{r}
+Q2_BS<-function() {
+df2<-merge(Users,Posts,by.x='Id',by.y='OwnerUserId',all.x = T,all.y = F)
+
+#Finding sum
+Qsum<-aggregate(
+  x=Posts[c('FavoriteCount')],
+  by=Posts[c('OwnerUserId')],
+  FUN = function(x)c(sum(x,na.rm = T),max(x,na.rm = T))
+)
+Qsum<-as.data.frame(cbind(Qsum[,1], Qsum[,2]))
+Qsum <- Qsum[order(Qsum$V2,decreasing = c(TRUE)),]
+colnames(Qsum)<-c('Id','FavoriteTotal','MostFavoriteQuestionLikes')
+Qsum<-head(Qsum,10)
+
+result<-merge(Qsum,df2,by.x=c('Id',
+                              'MostFavoriteQuestionLikes'),
+                              by.y=c('Id','FavoriteCount'), 
+                              all.x=T, 
+                              all.y=F)
+result<-result[c('DisplayName',
+                 'Age',
+                 'Location',
+                 'FavoriteTotal',
+                 'Title',
+                 'MostFavoriteQuestionLikes')]
+result<-result[order(result$FavoriteTotal,
+                     decreasing = c(TRUE)),]
+names(result)[names(result) == "Title"] <- "MostFavoriteQuestion"
+result
+}
+```
+
+#### Description
+
+First I created Qsum to find the sum and maximum and I’m doing it using an aggregate function with a custom function inside, this custom function returns a vector with sum and max. After this, I’m changing obtained vectors to the data frame using cbind and as.data.frame. Then I perform ordering, limiting to 10 rows and naming columns.
+In the end, Qsum is a data frame with id, sum, and max which is exactly what is needed. I created df2 by merging Posts and Users to get all columns that need to be merged with Qsum.
+Then I perform merge on Qsum and df2 to have all possible values with respect to Qsum.
+The last step is to get from the results only needed columns and change their names.
+I used function all_equal(df1, df2) Which returned TRUE but many warnings.
+
+```{r message=TRUE, warning=FALSE}
+all_equal(Q2_RS, Q2_BS(),convert = T)
+```
+
+### Dplyr Solution <a name="Q2_D"></a>
+
+```{r}
+Q2_DP<-function() {
+filter(Posts,PostTypeId==1)%>%
+  filter(!is.na(FavoriteCount)) %>%
+  group_by(OwnerUserId)%>%
+  summarise(MostFavoriteQuestion = Title[which.max(FavoriteCount)],
+            MostFavoriteQuestionLikes=max(FavoriteCount),
+            FavoriteTotal=sum(FavoriteCount)) %>%
+  left_join(Users,c('OwnerUserId'='Id')) %>%
+  filter(!is.na(DisplayName)) %>%
+  select(DisplayName,
+         Age,Location,
+         FavoriteTotal,
+         MostFavoriteQuestion,
+         MostFavoriteQuestionLikes) %>%
+  arrange(desc(FavoriteTotal)) %>%
+  head(10) ->df2
+}
+```
+
+#### Description
+
+I’m getting all Posts with Type 1 and group it by ‘OwnerUserId’ To get the sum, max and title for which ‘FavoriteCount’ is maximum. 
+When I have it I can join it with Users table to get all necessary information for the user that owns questions with biggest favorite count number
+
+```{r message=TRUE}
+all_equal(Q2_RS, Q2_DP(),convert = T)
+```
+### Data.table Solution <a name="Q2_DT"></a>
+
+
+
+```{r}
+Q2_DT<-function() {
+df2<-merge(as.data.table(Users),as.data.table(Posts),by.x='Id',by.y='OwnerUserId',all.x = T,all.y = F)
+
+Qsum <-na.omit(as.data.table(Posts)[, .(OwnerUserId,FavoriteCount)])
+Qsum <-na.omit(Qsum[, .(FavoriteTotal = sum(FavoriteCount),
+                        MostFavoriteQuestionLikes = max(FavoriteCount)), 
+                    by = OwnerUserId])
+Qsum <-Qsum[order(-FavoriteTotal)]
+Qsum <-head(Qsum,10)
+
+result<-merge(Qsum,df2,by.x=c('OwnerUserId',
+                              'MostFavoriteQuestionLikes'),
+              by.y=c('Id','FavoriteCount'), 
+              all.x=T, 
+              all.y=F)
+
+result<-result[, .(DisplayName,
+                 Age,
+                 Location,
+                 FavoriteTotal,
+                 MostFavoriteQuestion=Title,
+                 MostFavoriteQuestionLikes)]
+
+result<-result[order(-FavoriteTotal)]
+result
+}
+```
+
+#### Description
+Way of solving it very similar to the basic one.
+```{r message=TRUE}
+all_equal(Q2_RS, Q2_DT())
+```
+## Third Query  <a name="Q3"></a>
+### Reference Solution <a name="Q3_R"></a>
+```{r}
+Q3_RS<-sqldf("SELECT
+Posts.Title,
+CmtTotScr.CommentsTotalScore
+FROM (
+  SELECT
+  PostID,
+  UserID,
+  SUM(Score) AS CommentsTotalScore
+  FROM Comments
+  GROUP BY PostID, UserID
+) AS CmtTotScr
+JOIN Posts ON Posts.ID=CmtTotScr.PostID AND
+         Posts.OwnerUserId=CmtTotScr.UserID
+WHERE Posts.PostTypeId=1
+ORDER BY CmtTotScr.CommentsTotalScore DESC
+LIMIT 10")
+```
+
+
+### Base Solution <a name="Q3_B"></a>
+
+```{r}
+Q3_BS<-function() {
+  CmtTotScr<-aggregate(
+  x=Comments[c('Score')],
+  by=Comments[c('PostId','UserId')],
+  sum)
+
+colnames(CmtTotScr)<-c('PostId','UserId','CommentsTotalScore')
+df2<-merge(Posts,
+           CmtTotScr,
+           by.x=c('Id','OwnerUserId'),
+           by.y=c('PostId','UserId'))
+df2<-df2[(df2$PostTypeId==1),]
+df2<-df2[order(df2$CommentsTotalScore,decreasing = c(TRUE)),]
+df2<-df2[c('Title','CommentsTotalScore')]
+df2<-head(df2,10)
+df2
+}
+```
+
+#### Description
+First I created an Inner query CmtTotScr that sums Score concerning PostID and UserID. Then I change column names and CmtTotScr is ready. I have all needed IDs, now I need to merge them with Posts. After join, I create WHERE statement using simple: “df2[(df2\$PostTypeId==1),]”. ORDER statement is represented by simple function order. 
+In the end, I changed the column names.
+I check correctness using “all_equal(df1,df2)” which returns TRUE.
+
+```{r message=TRUE, warning=FALSE}
+all_equal(Q3_RS, Q3_BS(),convert = T)
+```
+
+
+### Dplyr Solution <a name="Q3_D"></a>
+
+```{r}
+Q3_DP<-function() {
+Comments%>%
+  group_by(PostId,UserId)%>%
+  summarise(CommentsTotalScore=sum(Score))%>%
+  right_join(filter(Posts,PostTypeId==1),c('PostId'='Id','UserId'='OwnerUserId'))%>%
+  arrange(desc(CommentsTotalScore))%>%
+  ungroup(PostId)%>%
+  select(Title,CommentsTotalScore)%>%
+  head(10)->df2
+  df2
+}
+```
+
+#### Description 
+I start by summing scores for every user post. Then I connect it with the Post table but only with Type 1. From this, after arrange I get top 10 comments with the biggest number of posts.
+
+```{r message=TRUE, warning=FALSE}
+all_equal(Q3_RS, Q3_DP(),convert = T)
+```
+
+### Data.table Solution <a name="Q3_DT"></a>
+
+```{r}
+Q3_DT<-function() {
+CmtTotScr<-as.data.table(Comments)[, .(CommentsTotalScore = sum(Score)), by = .(PostId,UserId)]
+
+df2<-merge(as.data.table(Posts),
+           CmtTotScr,
+           by.x=c('Id','OwnerUserId'),
+           by.y=c('PostId','UserId'))
+df2<-df2[PostTypeId==1]
+df2<-df2[order(-CommentsTotalScore)]
+df2<-df2[, .(Title,CommentsTotalScore)]
+df2<-head(df2,10)
+}
+```
+
+#### Description
+Way of solving it very similar to the basic one.
+```{r message=TRUE}
+all_equal(Q3_RS, Q3_DT())
+```
+
+## Fourth Query <a name="Q4"></a>
+### Reference Solution <a name="Q4_R"></a>
+
+```{r}
+Q4_RS<-sqldf("SELECT DISTINCT
+Users.Id,
+Users.DisplayName,
+Users.Reputation,
+Users.Age,
+Users.Location
+FROM (
+  SELECT
+  Name, UserID
+  FROM Badges
+  WHERE Name IN (
+    SELECT
+    Name
+    FROM Badges
+    WHERE Class=1
+    GROUP BY Name
+    HAVING COUNT(*) BETWEEN 2 AND 10
+  )
+  AND Class=1
+) AS ValuableBadges
+JOIN Users ON ValuableBadges.UserId=Users.Id")
+```
+
+### Base Solution <a name="Q4_B"></a>
+```{r}
+Q4_BS<-function() {
+#INNER QUERY:
+{
+  BadgesNames<-Badges[(Badges$Class==1),]
+  BadgesNames<-BadgesNames[,c('Name','UserId')]
+  BadgesNames<-aggregate(BadgesNames$Name,
+                         BadgesNames[c('Name')],
+                         length)
+  BadgesNames<-BadgesNames[(BadgesNames$x>=2)&
+                             (BadgesNames$x<=10),]
+  colnames(BadgesNames)<-c('Name')
+  
+  ValuableBadges<-Badges[(Badges$Class==1),]
+  ValuableBadges<-ValuableBadges[,c('Name','UserId')]
+  ValuableBadges<-merge(BadgesNames,
+                        ValuableBadges,
+                        by='Name')
+}
+#SOLUTION: 
+df2<-merge(Users,ValuableBadges,by.x = 'Id', by.y = 'UserId')
+df2<-df2[,c('Id','DisplayName','Reputation','Age','Location')]
+df2<-unique(df2)
+df2
+}
+```
+
+#### Description
+
+The biggest problem in this query is the inner query because it consists of another level inner query. I started with the inner query of the inner query which I called BadgesNames.
+WHERE statement is done using Badges [ ( Badges\$Class ==1) ,]. HAVING COUNT is done just as before with function aggregate with parameter length. 
+“HAVING COUNT(*) BETWEEN 2 AND 10” is done using simply:
+BadgesNames [ ( BadgesNames\$x>=2)&( BadgesNames\$x <= 10) ,] all that left for this inner query is change of column names.
+
+Now we can go into the Inner query of the main query which I called ValuableBadges.
+First I did the easy part of the WHERE statement using simply: Badges[(Badges\$Class==1),]. Then I discovered that the “WHERE Name IN…” statement can be obtained by simple marge by Name. If the name exists it must be the result of a merge.
+
+Having a list of ‘ValuableBadges’ all that needs to be done is merge with User, this way we obtain all users that we were looking for. In the end, I get all columns needed, and I check uniqueness.\\
+I used function all\_equal(df1, df2) Which returned TRUE
+
+```{r message=TRUE, warning=FALSE}
+all_equal(Q4_RS, Q4_BS(),convert = T)
+```
+
+
+### Dplyr Solution <a name="Q4_D"></a>
+```{r}
+Q4_DP<-function() {
+filter(Badges,Class==1)%>%
+  group_by(Name)%>%
+  summarise(count=n())%>%
+  filter(count>=2 & count<=10)->ValuableBadges
+Badges%>%
+  filter(Class==1)%>%
+  filter(Name %in%ValuableBadges$Name)%>%
+  select(Name,UserId)%>%
+  left_join(Users,c('UserId'='Id'))%>%
+  select(Id=UserId,DisplayName,Reputation,Age,Location)%>%
+  filter(!duplicated(DisplayName))->df2
+df2
+}
+```
+#### Description
+I start with Bages with class one, I count them and I save all results bigger than 2 and less than 10 to ValuableBadges.
+Next, I start with Badges of class 1 if there budges in ValuableBadges I connect it with the user and show all the needed information.
+
+```{r message=TRUE, warning=FALSE}
+all_equal(Q4_RS, Q4_DP(),convert = T)
+```
+
+
+### Data.table Solution <a name="Q4_DT"></a>
+
+```{r}
+Q4_DT<-function() {
+#INNER QUERY:
+{
+  BadgesNames<-as.data.table(Badges)[Class==1]
+  BadgesNames<-BadgesNames[, .(Name,UserId)]
+  BadgesNames<-BadgesNames[, .N,by=Name]
+  
+  BadgesNames<-BadgesNames[N>=2&N<=10]
+
+  ValuableBadges<-as.data.table(Badges)[Class==1]
+  ValuableBadges<-ValuableBadges[, .(Name,UserId)]
+  ValuableBadges<-merge(BadgesNames,
+                        ValuableBadges,
+                        by='Name')
+}
+#SOLUTION: 
+df2<-merge(as.data.table(Users),ValuableBadges,by.x = 'Id', by.y = 'UserId')
+df2<-df2[, .(Id,DisplayName,Reputation,Age,Location)]
+df2<-unique(df2)
+df2
+}
+```
+
+#### Description
+Way of solving it very similar to the basic one.
+```{r message=TRUE}
+all_equal(Q4_RS, Q4_DT())
+```
+
+## Fifth Query  <a name="Q5"></a>
+### Reference Solution <a name="Q5_R"></a>
+```{r}
+Q5_RS<-sqldf("SELECT
+Questions.Id,
+Questions.Title,
+BestAnswers.MaxScore,
+Posts.Score AS AcceptedScore,
+BestAnswers.MaxScore-Posts.Score AS Difference
+FROM (
+  SELECT Id, ParentId, MAX(Score) AS MaxScore
+  FROM Posts
+  WHERE PostTypeId==2
+  GROUP BY ParentId
+) AS BestAnswers
+JOIN (
+  SELECT * FROM Posts
+  WHERE PostTypeId==1
+) AS Questions
+ON Questions.Id=BestAnswers.ParentId
+JOIN Posts ON Questions.AcceptedAnswerId=Posts.Id
+WHERE Difference>50
+ORDER BY Difference DESC")
+```
+
+### Base Solution <a name="Q5_B"></a>
+```{r}
+Q5_BS<-function() {
+BestAnswers<-Posts[Posts$PostTypeId == 2,
+              c("Id", "ParentId", "Score")]
+splitted <- split(BestAnswers, 
+              BestAnswers$ParentId)
+aggregated <- lapply(splitted, 
+              FUN = function(x) x[which.max(x$Score), ])
+BestAnswers <- data.frame(Id = sapply(aggregated, function(x) x$Id),
+              ParentId = sapply(aggregated, function(x) x$ParentId),
+              MaxScore = sapply(aggregated, function(x) x$Score))
+MyPosts<-Posts[,c("Id"
+                  ,"Score",
+                  "AcceptedAnswerId")]
+Questions<-Posts[Posts$PostTypeId == 1, 
+                 c("Id", "Title","AcceptedAnswerId")]
+
+HelpQ    <-na.omit(merge(x=BestAnswers,
+                         y=Questions,
+                         by.x = 'ParentId',
+                         by.y = 'Id',
+                         all.x = T,
+                         all.y = F))
+HelpQ2   <-merge(x=HelpQ,
+                 y=MyPosts,
+                 by.x='AcceptedAnswerId',
+                 by.y='Id', 
+                 suffixes = c('.HELPQ','.Posts') )
+HelpQ3 <- data.frame(Id = HelpQ2$ParentId,
+                          Title=HelpQ2$Title,
+                          MaxScore=HelpQ2$MaxScore,
+                          AcceptedScore=HelpQ2$Score,
+                          Difference=HelpQ2$MaxScore-HelpQ2$Score)
+HelpQ3<-HelpQ3[HelpQ3$Difference>50,]
+HelpQ3
+}
+```
+
+#### Description
+
+ (First, part BestAnswers was done by myself almost in the same way as the first example solution presented in the mail that’s why I use that one. But of course, my solution of this part had errors to the moment of receiving mail) 
+ 
+First, we create an inner query called BestAnswers, simple command: Posts[ Posts\$PostTypeId == 2, c("Id", "ParentId", "Score")] gives us needed columns and fulfill WHERE statement. Then we split BestAnswers by ParentId by function split. Then we want to find max for every split part and we do it using lapply. At this point, we have everything needed, now we create columns using sapply and connect columns by data.frame
+
+Now I prepare for myself Questions and MyPosts tables to make my code more clear.
+I use merge to assign a Question for every best answer and save it into ‘HelpQ’.
+Now ‘HelpQ’ has all Id’s I need, but I need more columns so I’m merging it with MyPosts table and save it to HelpQ2. Now, HelpQ2 has all the needed data but I need to process it.
+After processing HelpQ2 I obtain HelpQ3.
+
+I used function all_equal(HelpQ3,df1) Which returned TRUE
+
+```{r message=TRUE, warning=FALSE}
+all_equal(Q5_RS, Q5_BS(),convert = T)
+```
+
+### Dplyr Solution <a name="Q5_D"></a>
+
+```{r}
+Q5_DP<-function() {
+Posts%>%
+  select(Id,AcceptedScore=Score)->MyPosts
+
+Posts%>%
+  filter(PostTypeId==1)%>%
+  select(Id,AcceptedAnswerId,Title)->Questions
+
+Posts%>%
+  filter(PostTypeId==2)%>%
+  group_by(ParentId)%>%
+  summarise(Id=Id[which.max(Score)],ParentId=ParentId[which.max(Score)],MaxScore = max(Score))->BestAnswers  #Bestsnswers
+
+#correct to this moment
+BestAnswers%>%
+  left_join(Questions,c('ParentId'='Id'))%>%
+  left_join(MyPosts,c('AcceptedAnswerId'='Id'))%>%
+  select(ParentId,Id,Title,MaxScore,AcceptedAnswerId,AcceptedScore)->BestAnswersWithQuestions
+
+BestAnswersWithQuestions%>%
+  mutate(Difference=MaxScore-AcceptedScore)%>%
+  filter(Difference>50)%>%
+  arrange(desc(Difference))%>%
+  select(Id=ParentId,Title,MaxScore,AcceptedScore,Difference)->df2
+df2
+}
+```
+
+#### Description
+First I prepare to myself all inner queries or tables that I need to use. This is MyPosts, Questions, BestAnswers. I created it separately for clarity and to be sure that one table doesn’t have needed columns that could cause problems.
+BestAnswersWithQuestions Is just a connection that connects all the best answers to their questions.
+I add to this table column ‘Difference’, filter it, and arrange to have all results bigger than 50, correctly ordered.
+```{r message=TRUE, warning=FALSE}
+all_equal(Q5_RS, Q5_DP(),convert = T)
+```
+
+### Data.table Solution <a name="Q5_DT"></a>
+
+```{r}
+Q5_DT<-function() {
+BestAnswers<-as.data.table(Posts)[PostTypeId == 2]
+BestAnswers<-BestAnswers[, .(Id, ParentId, Score)]
+
+
+splitted <- split(BestAnswers, 
+                  BestAnswers$ParentId)
+aggregated <- lapply(splitted, 
+                     FUN = function(x) x[which.max(Score),])
+BestAnswers <- data.table(Id = sapply(aggregated, function(x) x$Id),
+                          ParentId = sapply(aggregated, function(x) x$ParentId),
+                          MaxScore = sapply(aggregated, function(x) x$Score))
+MyPosts<-as.data.table(Posts)[, .(Id
+                                ,Score,
+                                AcceptedAnswerId)]
+Questions<-as.data.table(Posts)[PostTypeId == 1] 
+Questions<-as.data.table(Questions)[, .(Id, Title,AcceptedAnswerId)]
+
+HelpQ    <-na.omit(merge(BestAnswers,
+                         Questions,
+                         by.x = 'ParentId',
+                         by.y = 'Id',
+                         all.x = T,
+                         all.y = F))
+HelpQ2   <-merge(HelpQ,
+                 MyPosts,
+                 by.x='AcceptedAnswerId',
+                 by.y='Id')
+HelpQ3 <- data.table(Id = HelpQ2$ParentId,
+                     Title=HelpQ2$Title,
+                     MaxScore=HelpQ2$MaxScore,
+                     AcceptedScore=HelpQ2$Score,
+                     Difference=HelpQ2$MaxScore-HelpQ2$Score)
+HelpQ3<-HelpQ3[Difference>50]
+HelpQ3
+}
+```
+
+#### Description
+Way of solving it very similar to the basic one.
+```{r message=TRUE}
+all_equal(Q5_RS, Q5_DT())
+```
+
+
+
+
+## Summary <a name="sum"></a>:
+All queries are correct and the results are the same.
+
+```{r message=TRUE, warning=FALSE, error=FALSE}
+
+compare<-function(a,b,c,d) 
+{
+  result=TRUE
+  if (all_equal(a,b)==FALSE){result=FALSE}
+  if (all_equal(a,c)==FALSE){result=FALSE}
+  if (all_equal(a,d)==FALSE){result=FALSE}
+  result
+}
+
+compare(Q1_RS,Q1_BS(),Q1_DP(),Q1_DT())
+compare(Q2_RS,Q2_BS(),Q2_DP(),Q2_DT())
+compare(Q3_RS,Q3_BS(),Q3_DP(),Q3_DT())
+compare(Q4_RS,Q4_BS(),Q4_DP(),Q4_DT())
+compare(Q5_RS,Q5_BS(),Q5_DP(),Q5_DT())
+```
+
+```{r message=TRUE, warning=FALSE, error=FALSE}
+  microbenchmark::microbenchmark(
+    sqldf=Q1_RS,
+    base=Q1_BS(),
+    dplyr=Q1_DP(),
+    data.table=Q1_DT()
+  )
+  
+    microbenchmark::microbenchmark(
+    sqldf=Q2_RS,
+    base=Q2_BS(),
+    dplyr=Q2_DP(),
+    data.table=Q2_DT()
+  )
+    
+      microbenchmark::microbenchmark(
+    sqldf=Q3_RS,
+    base=Q3_BS(),
+    dplyr=Q3_DP(),
+    data.table=Q3_DT()
+  )
+      
+        microbenchmark::microbenchmark(
+    sqldf=Q4_RS,
+    base=Q4_BS(),
+    dplyr=Q4_DP(),
+    data.table=Q4_DT()
+  )
+``` 
+  
+I try to find the most efficient way of solving by running all of them in sequence to have a clear comparison with every solution type.
+```{r message=TRUE, warning=FALSE, error=FALSE}
+  runAll<-function(a,b,c,d,e)
+  {
+    s<-a
+    s<-b
+    s<-c
+    s<-d
+    s<-e
+  }
+  microbenchmark::microbenchmark(
+    sqldf=runAll(Q1_RS,Q2_RS,Q3_RS,Q4_RS,Q5_RS),
+    base=runAll(Q1_BS(),Q2_BS(),Q3_BS(),Q4_BS(),Q5_BS()),
+    dplyr=runAll(Q1_DP(),Q2_DP(),Q3_DP(),Q4_DP(),Q5_DP()),
+    data.table=runAll(Q1_DT(),Q2_DT(),Q3_DT(),Q4_DT(),Q5_DT())
+  )
+```
+
+From this, we can conclude that the fastest method is using dplyr, almost 10 times faster than the rest. Basic and data.table are very similar in the case of timing but base is a little faster.

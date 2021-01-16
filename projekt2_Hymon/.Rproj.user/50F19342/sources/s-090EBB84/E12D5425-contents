@@ -1,0 +1,189 @@
+---
+title: "Świderski_Szymon_298808_assigment_2"
+author: "Szymon Świderski"
+date: "9 01 2021"
+output: html_document
+---
+
+
+## Introduction
+
+This is a report that describes the work on assigment 2. Task was to prepare code neded to load data sets.
+
+For solving this task I create my package that loads data from .xml files and converts them to data.frame. Package is called dataFrameFromXML. Function called: 'dataFrameFromXML.' in this package can read every .xml file clean it and set correct data types. Every function has a help page.
+```{r setup}
+library(dataFrameFromXML)
+```
+
+Showing help pages in this report require different packages that's why I needed to load the following data and use function showHelpPafeOf. This function converts the normal help page to be visible in the report.
+```{r, message=FALSE , warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp2)
+library(forecast)
+
+showHelpPafeOf<-function(X)
+{
+helpfile <- utils:::.getHelpFile(help( X ))
+outfile <- tempfile(fileext = ".html")
+tools:::Rd2HTML(helpfile, out =outfile)
+rawHTML <- paste(readLines(outfile), collapse="\n")
+knitr::asis_output(htmltools::htmlPreserve(rawHTML))
+}
+``` 
+
+
+1. [Usage Example](#LDF)
+    1. [Cleaning](#CLE)
+    2. [Data conversion](#DTC)
+    3. [Basic Statistics](#BASES)
+2. [Code](#CODE)
+3. [Documentation](#DOCS)
+
+
+
+## Usage Example  <a name="LDF"></a>
+
+To load .xml file we can use function dataFrameFromXML. From my own package called 'dataFrameFromXML'. We can simply give this function path to .xml file and as a result, we will get data.frame. I wrap the result to the head function to have a clear view in the report.
+
+```{r}
+head( dataFrameFromXML('pd2/Badges.xml') )
+```
+
+### Cleaning  <a name="CLE"></a>
+
+To check cleaning in data I created short .xml file called checkdataloading.xml. It is a copy of the original Badges.xml but It has only a few rows and some data in XML attributes are missing. This way we can clearly see that this function has no problem in setting NA in the correct places.
+
+```{r}
+dataFrameFromXML('pd2/checkdataloading.xml')
+```
+
+
+### Data conversion  <a name="DTC"></a>
+After a normal reading of data, we have all values of Character type. I decided that this function will find matching types and convert the type of every column to the correct one. 
+My function distinguishes three types:
+- Numeric
+- Date
+- Character
+In my opinion, there is no need to be more specific about the types of columns.
+
+```{r}
+d<-dataFrameFromXML('pd2/checkdataloading.xml')
+str(d)
+```
+
+More complex example:
+
+```{r}
+d<-dataFrameFromXML('pd2/Posts.xml')
+str(d)
+```
+
+### Basic Statistics  <a name="BASES"></a>
+
+Example on Badges.xml
+How many users in diffrent class we have:
+```{r}
+d<-dataFrameFromXML('pd2/Badges.xml')
+d<-aggregate(d[c('Class')],by=d[c('Class')],length)
+head(d)
+```
+
+## Code  <a name="CODE"></a>
+
+### dataFrameFromXML
+Most important function is dataFrameFromXML. First, it checks if a given file exists then it uses functions from xml library to read .xml file. It read it but everything is in character type. That's why the line:
+"data <- as.data.frame(lapply(data, convertDataType))"
+is needed. It divides data.frame with respect to columns and converts each of them. That's why after it we need to cast it to data.frame again.
+
+```{r}
+dataFrameFromXML <- function(xmlFilePath)
+{
+  if (file.exists(xmlFilePath)==FALSE)
+  {
+    stop("File on given path don't exists ")
+  }
+  else
+  {
+    result <- XML::xmlParse(xmlFilePath)
+    nodes <- XML::getNodeSet(result, path = "//row")
+    data <-  XML:::xmlAttrsToDataFrame(nodes)
+    data <- as.data.frame(lapply(data, convertDataType))
+    data
+  }
+}
+```
+
+**Functions used:**
+
+1. XML::xmlParse "Parses an XML or HTML file or string containing XML/HTML content, and generates an R structure representing the XML/HTML tree."
+2. XML::getNodeSet "These functions provide a way to find XML nodes that match a particular criterion. It uses the XPath
+syntax and allows very powerful expressions to identify nodes of interest within a document both
+clearly and efficiently"
+3. XML:::xmlAttrsToDataFrame, converts Node set to data.frame
+4. convertDataType Belong to dataFrameFromXML library (described below)
+
+
+### convertDataType
+
+This function works like a switch. It checks the first non-NA element in the list that it gets. It checks is it numeric if so convert all elements to numeric and return. If the first non-NA element represents some date convert all elements to date. If the first non-NA is not numeric and not date does nothing.
+
+```{r}
+convertDataType <- function(x)
+{
+  if(isNumeric(firstNotNA(x)))   as.numeric(x)
+  else if(isDate(firstNotNA(x))) as.Date(x)
+  else x
+}
+```
+**Functions used:**
+
+1. isNumeric Belong to dataFrameFromXML library (described below)
+2. isDate Belong to dataFrameFromXML library (described below)
+3. as.numeric "Creates or coerces objects of type "numeric""
+4. as.Date 'Functions to convert between character representations and objects of class "Date"
+
+### firstNotNA
+
+The advantage of this function is that it won't analyze hole input. It goes through all elements and finds first not NA.
+```{r}
+firstNotNA = function(x) for(i in 1:length(x)) if(!is.na(x[i])) return(x[i])
+```
+
+### isNumeric
+If a character can not be represented as numeric as. numeric returns NA and this is all needed to conclude can character be converted. But we need to suppressWarnings because if a character can not be converted and It returns NA warning occurs.
+```{r}
+isNumeric = function(x) suppressWarnings(!is.na(as.numeric(x)))
+```
+
+### isDate
+
+Works in a similar way as isNumeric.
+```{r}
+isDate = function(x) !is.na(as.Date(as.character(x), tz = 'UTC', format = '%Y-%m-%d'))
+```
+
+
+## Documentation <a name="DOCS"></a>
+
+I created a help page for every function in this package. To show the help page in this report I use showHelpPafeOf written at the beginning. 
+Package dataFrameFromXML contains five functions. Outside of this raport to show help page it is enought to write ?dataFrameFromXML or help(dataFrameFromXML)
+
+```{r}
+showHelpPafeOf('dataFrameFromXML')
+```
+
+```{r}
+showHelpPafeOf('convertDataType')
+```
+
+```{r}
+showHelpPafeOf('firstNotNA')
+```
+
+```{r}
+showHelpPafeOf('isNumeric')
+```
+
+```{r}
+showHelpPafeOf('isDate')
+```

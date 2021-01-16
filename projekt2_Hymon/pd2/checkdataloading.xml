@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<badges>
+  <row Id="2" UserId="23" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="3" UserId="22" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="4" UserId="21" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="5" UserId="20" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="6" UserId="19" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="7" UserId="18" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="8" UserId="17" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="9" UserId="16" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="10" UserId="15" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="11" UserId="14" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="12" UserId="13" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="13" UserId="12" Name="Autobiographer"  Class="3" TagBased="False" />
+  <row Id="14" UserId="11" Name="Autobiographer" Class="3" TagBased="False" />
+  <row Id="15" UserId="10" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="16" UserId="9" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="17" UserId="8" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="18" UserId="7" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="19" UserId="6" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="20" UserId="5" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="21" UserId="4" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="22" UserId="3" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="23" UserId="2" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="24" UserId="1" Name="Autobiographer" Date="2016-01-12T18:44:49.267" Class="3" TagBased="False" />
+  <row Id="25" UserId="20" Name="Precognitive" Date="2016-01-12T18:44:50.170" Class="3" TagBased="False" />
+  <row Id="26" UserId="18" Name="Precognitive" Date="2016-01-12T18:44:50.170" Class="3" TagBased="False" />
+  <row Id="27" UserId="22" Name="Precognitive" Date="2016-01-12T18:44:50.170" Class="3" TagBased="False" />
+  <row Id="28" UserId="17" Name="Precognitive" Date="2016-01-12T18:44:50.170" Class="3" TagBased="False" />
+</badges>
